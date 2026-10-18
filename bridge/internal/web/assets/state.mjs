@@ -1,0 +1,6 @@
+const labels={
+ en:{local_only:'Saved on this phone',pending_delivery:'Saved on PC · phone delivery pending',preparing:'Phone preparing audio',armed:'Phone scheduled',blocked_permission:'Blocked · phone permission needed',blocked_audio:'Blocked · phone audio unavailable',conflict:'Conflict · choose which version to keep',cancel_pending:'Cancel pending · phone may still ring',cancelled:'Cancelled on phone',fired:'Played on phone',dismissed:'Dismissed',snoozed:'Snoozed',missed:'Missed',interrupted:'Playback interrupted'},
+ ko:{local_only:'폰에 저장됨',pending_delivery:'PC 저장됨 · 폰 전송 대기',preparing:'폰 음성 준비 중',armed:'폰 예약됨',blocked_permission:'차단됨 · 폰 권한 필요',blocked_audio:'차단됨 · 폰 음성 준비 실패',conflict:'충돌 · 유지할 내용 선택 필요',cancel_pending:'취소 전송 대기 · 폰이 울릴 수 있음',cancelled:'폰에서 취소됨',fired:'폰에서 재생됨',dismissed:'중지됨',snoozed:'미뤄짐',missed:'지나간 알람',interrupted:'재생 중단됨'}
+};
+export function statusLabel(state,lang='en'){return (labels[lang]||labels.en)[state]||state;}
+export function scheduleState(entity,acks){const rule=entity.payload;const matched=acks.filter(a=>a.schedule_id===entity.entity_id&&a.epoch_id===rule.epoch_id&&a.server_revision===entity.server_revision);if(!rule.enabled)return matched.some(a=>a.state==='cancelled')?'cancelled':'cancel_pending';return matched[0]?.state||'pending_delivery';}

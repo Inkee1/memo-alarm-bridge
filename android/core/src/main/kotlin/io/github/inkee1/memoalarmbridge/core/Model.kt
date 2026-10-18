@@ -50,7 +50,7 @@ fun validateRule(rule:ScheduleRule):ValidationResult=checked{
 fun validateMutation(m:Mutation):ValidationResult=checked {
  require(m.schemaVersion==1&&validId(m.operationId)&&validId(m.entityId)&&m.baseRevision>=0){"Invalid mutation envelope"}
  require(m.entityType in listOf("note","schedule")){"Unknown entity type"}
- if(m.action=="delete"&&m.entityType=="note")return@checked
+ if(m.action=="delete"&&m.entityType=="note"){require(m.payload.keySet().isEmpty()){ "Delete payload must be an empty object" };return@checked}
  if(m.action=="cancel"&&m.entityType=="schedule"){
   require(m.payload.keySet()==setOf("epoch_id")&&validId(m.payload["epoch_id"].asString)){"Valid epoch required"};return@checked
  }

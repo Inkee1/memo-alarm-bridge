@@ -143,7 +143,10 @@ func ValidateMutation(m Mutation) error {
 		return errors.New("unknown entity type")
 	}
 	if m.Action == "delete" && m.EntityType == "note" {
-		return nil
+		if string(m.Payload) == "null" || len(m.Payload) == 0 {
+			return errors.New("delete payload must be an empty object")
+		}
+		return DecodeStrict(m.Payload, &struct{}{})
 	}
 	if m.Action == "cancel" && m.EntityType == "schedule" {
 		var p struct {

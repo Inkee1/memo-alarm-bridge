@@ -4,6 +4,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ModelTest {
+ @Test fun deleteRejectsUnknownPayloadFields() {
+  val payload=com.google.gson.JsonObject().apply { addProperty("exec","ignored-but-not-allowed") }
+  val m=Mutation(operationId="33333333-3333-4333-8333-333333333333",entityType="note",entityId="11111111-1111-4111-8111-111111111111",baseRevision=0,action="delete",payload=payload)
+  assertFalse(validateMutation(m).valid)
+ }
  @Test fun mutationRejectsUnknownPayloadFields() {
   val id="11111111-1111-4111-8111-111111111111"
   val payload=com.google.gson.JsonParser.parseString("{\"note_id\":\""+id+"\",\"text\":\"test\"}").asJsonObject
