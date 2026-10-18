@@ -1,0 +1,6 @@
+[versions]
+kotlin = "2.3.21"
+agp = "8.13.2"
+gson = "2.13.1"
+work = "2.10.1"
+junit = "4.13.2"

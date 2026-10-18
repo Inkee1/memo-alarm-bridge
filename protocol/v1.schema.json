@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MemoAlarm Bridge protocol v1 mutation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation_id",
+    "entity_type",
+    "entity_id",
+    "base_revision",
+    "action",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "operation_id": {
+      "$ref": "#/$defs/id"
+    },
+    "entity_type": {
+      "enum": [
+        "note",
+        "schedule"
+      ]
+    },
+    "entity_id": {
+      "$ref": "#/$defs/id"
+    },
+    "base_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "action": {
+      "enum": [
+        "upsert",
+        "cancel",
+        "delete"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "note_id",
+        "text"
+      ],
+      "properties": {
+        "note_id": {
+          "$ref": "#/$defs/id"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 32768
+        },
+        "audio_blob_sha256": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{64})?$"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schedule_id",
+        "epoch_id",
+        "kind",
+        "body",
+        "enabled"
+      ],
+      "properties": {
+        "schedule_id": {
+          "$ref": "#/$defs/id"
+        },
+        "epoch_id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "one_shot",
+            "daily",
+            "weekly"
+          ]
+        },
+        "at_utc": {
+          "type": "string"
+        },
+        "local_time": {
+          "type": "string"
+        },
+        "zone_id": {
+          "type": "string"
+        },
+        "week_days": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 7,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          }
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "respect_silent": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "note_codepoints": 32768,
+  "speech_codepoints": 2000,
+  "blob_bytes": 26214400,
+  "active_rules": 50,
+  "unknown_fields": "reject",
+  "unknown_schema_version": "reject"
+}

@@ -1,0 +1,7 @@
+{
+  "stored_without_device": "pending_delivery",
+  "tts_queue_accepted": "preparing",
+  "file_and_os_registered": "armed",
+  "offline_cancel": "cancel_pending",
+  "missing_exact_permission": "blocked_permission"
+}
