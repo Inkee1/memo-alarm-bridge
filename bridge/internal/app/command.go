@@ -40,6 +40,15 @@ func (s *Service) Dispatch(ctx context.Context, c Command) CommandResult {
 		return Failure("invalid_input", "params must be an object")
 	}
 	switch c.Method {
+	case "link.status", "link.enable", "link.invite", "link.disable":
+		if s.LinkCommand == nil {
+			return Failure("unavailable", "device link is unavailable")
+		}
+		v, e := s.LinkCommand(ctx, c.Method, c.Params)
+		if e != nil {
+			return Failure("connection_error", e.Error())
+		}
+		return success(v)
 	case "note.upsert", "note.delete", "schedule.upsert", "schedule.cancel":
 		var m domain.Mutation
 		if e := domain.DecodeStrict(c.Params, &m); e != nil {

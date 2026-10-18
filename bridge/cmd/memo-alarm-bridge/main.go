@@ -9,6 +9,7 @@ import (
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/app"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/domain"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/ipc"
+	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/link"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/store"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/web"
 	"io"
@@ -116,6 +117,12 @@ func serve(ctx context.Context, dataDir string, port int, out io.Writer) error {
 		return e
 	}
 	service := app.New(s)
+	deviceLink := link.NewRuntime(s, dataDir)
+	defer deviceLink.Close()
+	service.LinkCommand = deviceLink.Handle
+	if err := deviceLink.Restore(ctx); err != nil {
+		fmt.Fprintln(out, "Previously approved phone connection could not restart. Local workspace remains available:", err)
+	}
 	handler, e := web.New(service, token)
 	if e != nil {
 		return e

@@ -2,13 +2,17 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/domain"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/store"
 	"io"
 	"time"
 )
 
-type Service struct{ Store *store.Store }
+type Service struct {
+	Store       *store.Store
+	LinkCommand func(context.Context, string, json.RawMessage) (any, error)
+}
 
 func New(s *store.Store) *Service { return &Service{Store: s} }
 func (s *Service) Apply(ctx context.Context, m domain.Mutation) (domain.MutationResult, error) {
