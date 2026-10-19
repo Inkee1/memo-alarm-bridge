@@ -11,6 +11,8 @@ import android.view.*
 import android.widget.*
 import io.github.inkee1.memoalarmbridge.AppGraph
 import io.github.inkee1.memoalarmbridge.core.RecoveryReason
+import io.github.inkee1.memoalarmbridge.core.LaunchOutcome
+import io.github.inkee1.memoalarmbridge.links.ConversationLauncher
 import java.util.Locale
 
 class MainActivity:Activity() {
@@ -34,6 +36,7 @@ class MainActivity:Activity() {
         val tabs=LinearLayout(this)
         listOf(tr("Notes","메모"),tr("Alarms","알람"),tr("Setup","설정")).forEachIndexed{i,title->tabs.addView(button(title){show(i)},LinearLayout.LayoutParams(0,dp(54),1f))}
         root.addView(tabs)
+        root.addView(button(tr("Return to saved conversation","저장한 대화로 돌아가기")){openConversation()})
         holder=FrameLayout(this);root.addView(holder,LinearLayout.LayoutParams(-1,0,1f))
         message=label("",13,MUTED);message.maxLines=5;root.addView(message)
         notes=NotesScreen(this,state);alarms=AlarmsScreen(this,state);setup=SetupScreen(this)
@@ -53,6 +56,7 @@ class MainActivity:Activity() {
     fun <T> work(job:()->T,done:(T)->Unit){graph.work.execute{val result=runCatching(job);runOnUiThread{if(!isDestroyed)result.fold(done){error(it)}}}}
     fun <T> network(job:()->T,done:(T)->Unit){graph.syncWork.execute{val result=runCatching(job);runOnUiThread{if(!isDestroyed)result.fold(done){error(it)}}}}
     fun tell(text:String){message.text=text;message.setTextColor(MUTED)}
+    fun openConversation(){when(ConversationLauncher.launch(this)){LaunchOutcome.OPENED->Unit;LaunchOutcome.NO_SAVED_LINK->{show(2);tell(tr("Save your conversation link in Setup, or use Open ChatGPT home.","설정에서 대화 링크를 저장하거나 ChatGPT 홈 열기를 누르세요."))};LaunchOutcome.NO_HANDLER->{show(2);tell(tr("No app handled the link. Use Open ChatGPT home or your browser.","링크를 처리할 앱이 없습니다. ChatGPT 홈 또는 브라우저를 여세요."))}}}
     fun error(error:Throwable){message.text=tr("Could not complete: ","완료하지 못했습니다: ")+(error.message?:error.javaClass.simpleName);message.setTextColor(Color.rgb(154,48,48))}
     fun requestMic(){if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)notes.startRecording()else requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),MIC)}
     override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==MIC){if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED)notes.startRecording()else tell(tr("Microphone permission was not granted. Text notes still work.","마이크 권한이 없습니다. 텍스트 메모는 사용할 수 있습니다."))};setup.refresh()}

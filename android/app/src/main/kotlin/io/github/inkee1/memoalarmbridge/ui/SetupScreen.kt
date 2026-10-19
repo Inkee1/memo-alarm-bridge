@@ -14,6 +14,7 @@ import android.os.Build.MODEL
 import io.github.inkee1.memoalarmbridge.core.RecoveryReason
 import io.github.inkee1.memoalarmbridge.core.LocalRecord
 import io.github.inkee1.memoalarmbridge.sync.ConnectionInvite
+import io.github.inkee1.memoalarmbridge.links.ConversationLauncher
 
 class SetupScreen(private val host:MainActivity):LinearLayout(host) {
     private val status=host.label("",14,MainActivity.MUTED)
@@ -37,6 +38,12 @@ class SetupScreen(private val host:MainActivity):LinearLayout(host) {
         pairing.addView(host.button(host.tr("Remove phone connection","폰 연결 해제")){AlertDialog.Builder(host).setMessage(host.tr("Remove this phone’s connection credentials? Local notes and existing alarms remain. Revoke this device on the PC separately to remove its server access.","폰의 연결 인증 정보를 지울까요? 로컬 메모와 기존 알람은 유지됩니다. 서버 접근 권한도 없애려면 PC에서 해당 기기를 별도로 철회하세요.")).setNegativeButton(android.R.string.cancel,null).setPositiveButton(android.R.string.ok){_,_->host.work({host.graph.sync().unpair()}){refresh()}}.show()})
         pairing.addView(host.label(host.tr("Background sync is best effort, roughly every 15 minutes when connected. Use Sync now for an immediate attempt. Phone alarms use their saved offline schedule. Pair only with your own trusted PC; paired devices can read and change this collection.","백그라운드 동기화는 네트워크 연결 시 약 15분 간격으로 시도하며 지연될 수 있습니다. 즉시 시도하려면 ‘지금 동기화’를 누르세요. 알람은 폰의 오프라인 예약으로 실행합니다. 연결한 기기는 데이터 전체를 읽고 바꿀 수 있으므로 신뢰하는 내 PC에만 연결하세요."),12,MainActivity.MUTED));addView(pairing)
         addView(host.label(host.tr("Conflicts to review","검토할 충돌"),19,bold=true));addView(conflicts)
+        val conversation=host.panel();conversation.addView(host.label(host.tr("Return to a conversation","대화로 돌아가기"),20,bold=true))
+        val url=host.input("https://chatgpt.com/c/…").apply{setText(ConversationLauncher.saved(host))};conversation.addView(url)
+        conversation.addView(host.button(host.tr("Save link / clear when blank","링크 저장 / 빈칸이면 지우기")){ConversationLauncher.save(host,url.text.toString());host.tell(host.tr("Saved only on this phone.","이 폰에만 저장했습니다."))})
+        conversation.addView(host.button(host.tr("Open saved conversation","저장한 대화 열기")){host.openConversation()})
+        conversation.addView(host.button(host.tr("Open ChatGPT home","ChatGPT 홈 열기")){if(!ConversationLauncher.home(host))host.tell(host.tr("No app or browser could open ChatGPT. Open chatgpt.com yourself.","ChatGPT를 열 앱이나 브라우저가 없습니다. 직접 chatgpt.com을 여세요."))})
+        conversation.addView(host.label(host.tr("Paste your own conversation URL. Opening it uses the app or browser chosen by Android. Sign-in or returning to a particular dot is not guaranteed. This never starts a voice call.","본인의 대화 URL을 붙여넣으세요. Android가 선택한 앱 또는 브라우저로 엽니다. 로그인이나 특정 dot 복귀는 보장되지 않습니다. 음성 통화를 자동 시작하지 않습니다."),12,MainActivity.MUTED));addView(conversation)
     }
     fun refresh(){
         val notification=host.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
