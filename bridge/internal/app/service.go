@@ -10,8 +10,9 @@ import (
 )
 
 type Service struct {
-	Store       *store.Store
-	LinkCommand func(context.Context, string, json.RawMessage) (any, error)
+	Store          *store.Store
+	LinkCommand    func(context.Context, string, json.RawMessage) (any, error)
+	ControlCommand func(context.Context, string) (any, error)
 }
 
 func New(s *store.Store) *Service { return &Service{Store: s} }

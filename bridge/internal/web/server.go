@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"embed"
@@ -18,7 +19,7 @@ import (
 	"time"
 )
 
-//go:embed assets/index.html assets/app.js assets/state.mjs assets/audio.mjs assets/style.css
+//go:embed assets/index.html assets/app.js assets/state.mjs assets/audio.mjs assets/style.css assets/setup.html assets/setup.js
 var assets embed.FS
 
 type localSession struct {
@@ -32,6 +33,8 @@ type Server struct {
 	bootstrap string
 	sessions  map[string]localSession
 	files     http.Handler
+	dispatch  func(context.Context, app.Command) app.CommandResult
+	installer bool
 }
 
 func RandomToken() (string, error) {
@@ -46,7 +49,30 @@ func New(s *app.Service, bootstrap string) (*Server, error) {
 	if e != nil {
 		return nil, e
 	}
-	return &Server{service: s, bootstrap: bootstrap, sessions: map[string]localSession{}, files: http.FileServer(http.FS(root))}, nil
+	server := &Server{service: s, bootstrap: bootstrap, sessions: map[string]localSession{}, files: http.FileServer(http.FS(root))}
+	if s != nil {
+		server.dispatch = s.Dispatch
+	}
+	return server, nil
+}
+func NewInstaller(dispatch func(context.Context, app.Command) app.CommandResult, bootstrap string) (*Server, error) {
+	s, e := New(nil, bootstrap)
+	if e != nil {
+		return nil, e
+	}
+	s.dispatch = dispatch
+	s.installer = true
+	return s, nil
+}
+func (s *Server) ApprovalURL() (string, error) {
+	token, e := RandomToken()
+	if e != nil {
+		return "", e
+	}
+	s.mu.Lock()
+	s.bootstrap = token
+	s.mu.Unlock()
+	return "http://" + s.Host + "/#bootstrap=" + token, nil
 }
 func equal(a, b string) bool {
 	return len(a) > 0 && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
@@ -85,6 +111,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/audio/upload/") {
+			if s.service == nil {
+				http.NotFound(w, r)
+				return
+			}
 			hash := strings.TrimPrefix(r.URL.Path, "/api/audio/upload/")
 			ref, err := s.service.PutBlob(r.Context(), http.MaxBytesReader(w, r.Body, domain.MaxBlobBytes+1), hash)
 			if err != nil {
@@ -95,6 +125,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/audio/read/") {
+			if s.service == nil {
+				http.NotFound(w, r)
+				return
+			}
 			hash := strings.TrimPrefix(r.URL.Path, "/api/audio/read/")
 			path, err := s.service.Store.BlobPath(r.Context(), hash)
 			if err != nil {
@@ -130,7 +164,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 400, app.Failure("invalid_input", err.Error()))
 			return
 		}
-		writeJSON(w, 200, s.service.Dispatch(r.Context(), c))
+		writeJSON(w, 200, s.dispatch(r.Context(), c))
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -138,7 +172,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
-	case "/", "/app.js", "/state.mjs", "/audio.mjs", "/style.css":
+	case "/":
+		if s.installer {
+			raw, _ := assets.ReadFile("assets/setup.html")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Write(raw)
+			return
+		}
+		s.files.ServeHTTP(w, r)
+	case "/app.js", "/state.mjs", "/audio.mjs", "/style.css", "/setup.js":
 		s.files.ServeHTTP(w, r)
 	default:
 		http.NotFound(w, r)

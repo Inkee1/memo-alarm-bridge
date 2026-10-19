@@ -40,6 +40,18 @@ func (s *Service) Dispatch(ctx context.Context, c Command) CommandResult {
 		return Failure("invalid_input", "params must be an object")
 	}
 	switch c.Method {
+	case "app.open", "app.stop":
+		if e := domain.DecodeStrict(c.Params, &struct{}{}); e != nil {
+			return Failure("invalid_input", e.Error())
+		}
+		if s.ControlCommand == nil {
+			return Failure("unavailable", "process control unavailable")
+		}
+		value, e := s.ControlCommand(ctx, c.Method)
+		if e != nil {
+			return Failure("process_error", e.Error())
+		}
+		return success(value)
 	case "link.status", "link.enable", "link.invite", "link.disable":
 		if s.LinkCommand == nil {
 			return Failure("unavailable", "device link is unavailable")

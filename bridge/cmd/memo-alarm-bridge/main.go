@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/app"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/domain"
+	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/install"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/ipc"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/link"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/store"
@@ -31,11 +32,20 @@ func Run(args []string, in io.Reader, out, errout io.Writer) int {
 }
 func run(ctx context.Context, args []string, in io.Reader, out, errout io.Writer) int {
 	if len(args) == 0 {
-		args = []string{"serve"}
+		exe, _ := os.Executable()
+		if _, e := install.InstalledData(filepath.Dir(exe)); e == nil {
+			args = []string{"launch", "--root", filepath.Dir(exe)}
+		} else {
+			args = []string{"setup"}
+		}
 	}
 	if args[0] == "version" {
 		fmt.Fprintln(out, version)
 		return 0
+	}
+	switch args[0] {
+	case "setup", "install", "uninstall", "launch", "check-data":
+		return lifecycle(ctx, args, out, errout)
 	}
 	if args[0] != "serve" && args[0] != "request" && args[0] != "doctor" {
 		fmt.Fprintln(errout, "Usage: memo-alarm-bridge [serve|request --json|doctor|version] [--data directory]")
@@ -47,6 +57,7 @@ func run(ctx context.Context, args []string, in io.Reader, out, errout io.Writer
 	data := f.String("data", filepath.Join(root, "MemoAlarmBridge", "data"), "private data directory")
 	jsonInput := f.Bool("json", false, "read versioned command JSON from stdin")
 	port := f.Int("port", 0, "loopback UI port (0 selects a free port)")
+	open := f.Bool("open", false, "open a local browser when ready")
 	if e := f.Parse(args[1:]); e != nil {
 		return 2
 	}
@@ -55,7 +66,7 @@ func run(ctx context.Context, args []string, in io.Reader, out, errout io.Writer
 		return 2
 	}
 	if args[0] == "serve" {
-		if e := serve(ctx, *data, *port, out); e != nil {
+		if e := serve(ctx, *data, *port, out, *open); e != nil {
 			fmt.Fprintln(errout, "Bridge could not start:", e)
 			return 1
 		}
@@ -92,7 +103,7 @@ func run(ctx context.Context, args []string, in io.Reader, out, errout io.Writer
 	}
 	return 0
 }
-func serve(ctx context.Context, dataDir string, port int, out io.Writer) error {
+func serve(ctx context.Context, dataDir string, port int, out io.Writer, open bool) error {
 	if port < 0 || port > 65535 {
 		return errors.New("invalid port")
 	}
@@ -132,10 +143,23 @@ func serve(ctx context.Context, dataDir string, port int, out io.Writer) error {
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 8192}
 	child, cancel := context.WithCancel(ctx)
 	defer cancel()
+	service.ControlCommand = func(_ context.Context, method string) (any, error) {
+		if method == "app.open" {
+			url, e := handler.ApprovalURL()
+			return map[string]string{"url": url}, e
+		}
+		time.AfterFunc(200*time.Millisecond, cancel)
+		return map[string]bool{"stop_requested": true}, nil
+	}
 	done := make(chan error, 2)
 	go func() { done <- ipc.ServeLocal(child, pipe, service) }()
 	go func() { done <- server.Serve(listener) }()
 	fmt.Fprintf(out, "MemoAlarm Bridge %s\nApprove this local session in your browser:\nhttp://%s/#bootstrap=%s\nKeep this process running to manage PC data. Phone alarms run independently after confirmed registration.\n", version, handler.Host, token)
+	if open {
+		if e := openBrowser("http://" + handler.Host + "/#bootstrap=" + token); e != nil {
+			fmt.Fprintln(out, "Open the printed local link manually:", e)
+		}
+	}
 	select {
 	case <-ctx.Done():
 	case e = <-done:

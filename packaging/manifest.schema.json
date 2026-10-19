@@ -1,0 +1,17 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"MemoAlarm Bridge Windows package",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schema_version","app_id","version","platform","executable","sha256","database_schema","signature"],
+  "properties":{
+    "schema_version":{"const":1},
+    "app_id":{"const":"io.github.inkee1.memoalarmbridge"},
+    "version":{"type":"string","maxLength":64,"pattern":"^[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9]+([.-][A-Za-z0-9]+)*)?$"},
+    "platform":{"const":"windows-amd64"},
+    "executable":{"const":"memo-alarm-bridge.exe"},
+    "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "database_schema":{"const":2},
+    "signature":{"const":"unsigned"}
+  }
+}

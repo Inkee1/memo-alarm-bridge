@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,32 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestInstallerDispatchRequiresApprovedLocalSession(t *testing.T) {
+	calls := 0
+	handler, err := NewInstaller(func(context.Context, app.Command) app.CommandResult {
+		calls++
+		return app.CommandResult{SchemaVersion: 1, OK: true}
+	}, "bootstrap-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewUnstartedServer(handler)
+	handler.Host = server.Listener.Addr().String()
+	server.Start()
+	defer server.Close()
+	raw := `{"schema_version":1,"method":"install.apply","params":{"consent":true}}`
+	if r := request(t, server, "/api/command", server.URL, "", raw, nil, ""); r.StatusCode != 403 || calls != 0 {
+		t.Fatal("unapproved installer mutation")
+	}
+	cookie, csrf := session(t, server)
+	if r := request(t, server, "/api/command", "https://evil.example", "", raw, cookie, csrf); r.StatusCode != 403 || calls != 0 {
+		t.Fatal("foreign origin installer mutation")
+	}
+	if r := request(t, server, "/api/command", server.URL, "", raw, cookie, csrf); r.StatusCode != 200 || calls != 1 {
+		t.Fatal("approved local command not dispatched")
+	}
+}
 
 func TestAudioRoutesRequireSessionAndVerifyHash(t *testing.T) {
 	ts, _ := testServer(t)

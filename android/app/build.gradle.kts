@@ -1,4 +1,14 @@
+import java.io.File
+
 plugins { id("com.android.application"); kotlin("android") }
+val developmentKey=layout.buildDirectory.file("debug-signing/debug.keystore")
+val generateDevelopmentKey=tasks.register<Exec>("generateDevelopmentKey") {
+ outputs.file(developmentKey)
+ onlyIf { !developmentKey.get().asFile.exists() }
+ doFirst { developmentKey.get().asFile.parentFile.mkdirs() }
+ commandLine(File(System.getProperty("java.home"),"bin/keytool").absolutePath,"-genkeypair","-keystore",developmentKey.get().asFile.absolutePath,"-storetype","JKS","-storepass","android","-keypass","android","-alias","androiddebugkey","-dname","CN=Android Debug,O=MemoAlarm Bridge,C=US","-keyalg","RSA","-keysize","2048","-validity","365")
+}
+tasks.matching { it.name=="validateSigningDebug" }.configureEach { dependsOn(generateDevelopmentKey) }
 android {
  namespace="io.github.inkee1.memoalarmbridge"
  compileSdk=36
@@ -6,6 +16,7 @@ android {
  compileOptions {sourceCompatibility=JavaVersion.VERSION_17;targetCompatibility=JavaVersion.VERSION_17}
  kotlin {compilerOptions {jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)}}
  buildTypes {getByName("release") {isMinifyEnabled=false}}
+ signingConfigs {getByName("debug"){storeFile=developmentKey.get().asFile;storePassword="android";keyAlias="androiddebugkey";keyPassword="android"}}
 }
 dependencies {
  implementation(project(":core"))
