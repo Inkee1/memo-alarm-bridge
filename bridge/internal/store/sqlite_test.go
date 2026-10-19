@@ -35,6 +35,48 @@ func openTest(t *testing.T) *Store {
 	t.Cleanup(func() { s.Close() })
 	return s
 }
+func TestV1MigrationBacksUpBeforeAddingContactTime(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bridge.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Apply(ctx, noteMutation(901, 0, "survives upgrade")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec("ALTER TABLE devices DROP COLUMN last_seen;DELETE FROM schema_migrations;INSERT INTO schema_migrations VALUES(1,'test');PRAGMA user_version=1;"); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	files, err := filepath.Glob(path + ".before-v2-*.db")
+	if err != nil || len(files) != 1 {
+		t.Fatal("missing consistent migration backup")
+	}
+	backup, err := sql.Open("sqlite", files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backup.Close()
+	var version, count int
+	if err = backup.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 1 {
+		t.Fatal("backup was taken after migration")
+	}
+	if err = backup.QueryRow("SELECT count(*) FROM entities").Scan(&count); err != nil || count != 1 {
+		t.Fatal("backup lost original data")
+	}
+	snapshot, err := s.List(ctx)
+	if err != nil || len(snapshot.Entities) != 1 {
+		t.Fatal("migration lost note")
+	}
+	if _, err = s.Devices(ctx); err != nil {
+		t.Fatal("new contact column missing", err)
+	}
+}
 func TestOperationRetryReturnsSameRevision(t *testing.T) {
 	s := openTest(t)
 	m := noteMutation(1, 0, "hello")
@@ -212,7 +254,7 @@ func TestNewerDatabaseRejectedWithoutChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec("CREATE TABLE future_data(value TEXT);INSERT INTO future_data VALUES('keep');PRAGMA user_version=2;"); err != nil {
+	if _, err = db.Exec("CREATE TABLE future_data(value TEXT);INSERT INTO future_data VALUES('keep');PRAGMA user_version=3;"); err != nil {
 		t.Fatal(err)
 	}
 	db.Close()

@@ -10,6 +10,7 @@ android {
 dependencies {
  implementation(project(":core"))
  implementation("com.google.code.gson:gson:2.13.1")
+ implementation("androidx.work:work-runtime:2.10.1")
  testImplementation("junit:junit:4.13.2")
  androidTestImplementation("androidx.test:runner:1.6.2")
  androidTestImplementation("androidx.test.ext:junit:1.2.1")

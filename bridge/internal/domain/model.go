@@ -64,6 +64,14 @@ type MutationResult struct {
 	Revision    int64   `json:"server_revision"`
 	Status      string  `json:"status"`
 	Current     *Entity `json:"conflict_current,omitempty"`
+	Entity      *Entity `json:"entity,omitempty"`
+	Error       string  `json:"error,omitempty"`
+}
+type AppliedEvidence struct {
+	Revision        int64        `json:"server_revision"`
+	LocalGeneration int64        `json:"local_generation"`
+	EpochID         string       `json:"epoch_id"`
+	Occurrences     []Occurrence `json:"occurrences"`
 }
 type DeviceAck struct {
 	DeviceID         string            `json:"device_id"`
@@ -75,6 +83,7 @@ type DeviceAck struct {
 	ArmedOccurrences []Occurrence      `json:"armed_occurrences"`
 	ObservedAt       string            `json:"observed_at"`
 	Capabilities     map[string]string `json:"capabilities"`
+	PreviousApplied  []AppliedEvidence `json:"previous_applied,omitempty"`
 }
 type Snapshot struct {
 	SchemaVersion int         `json:"schema_version"`

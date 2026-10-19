@@ -2,6 +2,8 @@ package web
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/app"
 	"github.com/Inkee1/memo-alarm-bridge/bridge/internal/store"
@@ -13,6 +15,31 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestAudioRoutesRequireSessionAndVerifyHash(t *testing.T) {
+	ts, _ := testServer(t)
+	cookie, csrf := session(t, ts)
+	sum := sha256.Sum256([]byte("synthetic audio bytes"))
+	hash := hex.EncodeToString(sum[:])
+	path := "/api/audio/upload/" + hash
+	if r := request(t, ts, path, ts.URL, "", "synthetic audio bytes", nil, ""); r.StatusCode != 403 {
+		t.Fatal("unapproved audio write accepted", r.StatusCode)
+	}
+	if r := request(t, ts, path, ts.URL, "", "wrong bytes", cookie, csrf); r.StatusCode != 400 {
+		t.Fatal("hash mismatch not rejected", r.StatusCode)
+	}
+	if r := request(t, ts, path, ts.URL, "", "synthetic audio bytes", cookie, csrf); r.StatusCode != 200 {
+		t.Fatal("valid upload failed", r.StatusCode)
+	}
+	r := request(t, ts, "/api/audio/read/"+hash, ts.URL, "", "{}", cookie, csrf)
+	body, _ := io.ReadAll(r.Body)
+	if r.StatusCode != 200 || string(body) != "synthetic audio bytes" {
+		t.Fatal("audio round trip failed")
+	}
+	if r := request(t, ts, "/api/audio/read/"+hash, "https://evil.example", "", "{}", cookie, csrf); r.StatusCode != 403 {
+		t.Fatal("foreign origin read accepted")
+	}
+}
 
 func testServer(t *testing.T) (*httptest.Server, *Server) {
 	t.Helper()

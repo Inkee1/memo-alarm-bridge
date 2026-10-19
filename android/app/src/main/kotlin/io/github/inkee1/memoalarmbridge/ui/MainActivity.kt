@@ -51,6 +51,7 @@ class MainActivity:Activity() {
     override fun onDestroy(){notes.close();super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putInt("tab",selected);notes.saveDraft(out);alarms.saveDraft(out);super.onSaveInstanceState(out)}
     fun <T> work(job:()->T,done:(T)->Unit){graph.work.execute{val result=runCatching(job);runOnUiThread{if(!isDestroyed)result.fold(done){error(it)}}}}
+    fun <T> network(job:()->T,done:(T)->Unit){graph.syncWork.execute{val result=runCatching(job);runOnUiThread{if(!isDestroyed)result.fold(done){error(it)}}}}
     fun tell(text:String){message.text=text;message.setTextColor(MUTED)}
     fun error(error:Throwable){message.text=tr("Could not complete: ","완료하지 못했습니다: ")+(error.message?:error.javaClass.simpleName);message.setTextColor(Color.rgb(154,48,48))}
     fun requestMic(){if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)notes.startRecording()else requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),MIC)}

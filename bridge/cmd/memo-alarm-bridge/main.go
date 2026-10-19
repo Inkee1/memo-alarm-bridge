@@ -118,6 +118,7 @@ func serve(ctx context.Context, dataDir string, port int, out io.Writer) error {
 	}
 	service := app.New(s)
 	deviceLink := link.NewRuntime(s, dataDir)
+	deviceLink.SetSyncHandler(link.NewSyncHandler(s))
 	defer deviceLink.Close()
 	service.LinkCommand = deviceLink.Handle
 	if err := deviceLink.Restore(ctx); err != nil {

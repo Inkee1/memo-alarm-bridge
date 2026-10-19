@@ -17,8 +17,8 @@ class AlarmReceiver:BroadcastReceiver() {
                     try {context.startForegroundService(Intent(context,AlarmPlaybackService::class.java).putExtra("token",token))}
                     catch(_:Exception){graph.engine.finish(token,"interrupted")}
                 }
-                graph.work.execute {runCatching{graph.engine.reconcile(RecoveryReason.TRIGGER)}}
-            } finally {pending.finish()}
+                graph.work.execute {runCatching{graph.engine.reconcile(RecoveryReason.TRIGGER)};graph.requestSync()}
+            } finally {graph.requestSync();pending.finish()}
         }
     }
 }
@@ -31,7 +31,7 @@ class AlarmActions:BroadcastReceiver() {
             try {
                 if(intent.action=="io.github.inkee1.memoalarmbridge.SNOOZE")graph.engine.snooze(token)
                 else if(intent.action=="io.github.inkee1.memoalarmbridge.STOP")graph.engine.finish(token,"dismissed")
-            } finally {pending.finish()}
+            } finally {graph.requestSync();pending.finish()}
         }
     }
 }
@@ -48,6 +48,6 @@ class RecoveryReceiver:BroadcastReceiver() {
             else->return
         }
         val pending=goAsync();val graph=AppGraph.get(context)
-        graph.triggers.execute {try{graph.engine.reconcile(reason)}finally{pending.finish()}}
+        graph.triggers.execute {try{graph.engine.reconcile(reason)}finally{graph.requestSync();pending.finish()}}
     }
 }

@@ -16,7 +16,7 @@ data class PermissionSnapshot(val values:Map<String,String>) {
                 "alarm_volume" to checked{context.getSystemService(AudioManager::class.java).getStreamVolume(AudioManager.STREAM_ALARM)>0},
                 "private_storage" to checked{context.getSystemService(UserManager::class.java).isUserUnlocked},
                 // A setting alone is not evidence that synthesis completed.
-                "offline_tts" to "unknown"
+                "offline_voice" to "unknown"
             ))
         }
     }

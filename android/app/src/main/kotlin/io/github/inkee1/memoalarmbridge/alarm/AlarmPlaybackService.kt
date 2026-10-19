@@ -91,13 +91,13 @@ class AlarmPlaybackService:Service() {
         focus?.let{audio.abandonAudioFocusRequest(it)};focus=null
     }
     private fun remove(token:String,state:String?){
-        if(state!=null)runCatching{graph.engine.finish(token,state)}
+        if(state!=null){runCatching{graph.engine.finish(token,state)};graph.requestSync()}
         if(playing==token)releasePlayer()
         queue.remove(token);notificationIds.remove(token)?.let(notifications::cancel)
         if(queue.tokens.isEmpty())stopWhenEmpty()else playNext()
     }
-    private fun interruptAll(){val all=queue.tokens;queue.clear();releasePlayer();all.forEach{runCatching{graph.engine.finish(it,"interrupted")};notificationIds.remove(it)?.let(notifications::cancel)};stopWhenEmpty()}
+    private fun interruptAll(){val all=queue.tokens;queue.clear();releasePlayer();all.forEach{runCatching{graph.engine.finish(it,"interrupted")};notificationIds.remove(it)?.let(notifications::cancel)};graph.requestSync();stopWhenEmpty()}
     private fun stopWhenEmpty(){if(queue.tokens.isEmpty()){handler.removeCallbacks(poll);stopForeground(STOP_FOREGROUND_REMOVE);stopSelf()}}
-    override fun onDestroy(){handler.removeCallbacksAndMessages(null);val all=queue.tokens;queue.clear();releasePlayer();all.forEach{runCatching{graph.engine.finish(it,"interrupted")};notificationIds.remove(it)?.let(notifications::cancel)};super.onDestroy()}
+    override fun onDestroy(){handler.removeCallbacksAndMessages(null);val all=queue.tokens;queue.clear();releasePlayer();all.forEach{runCatching{graph.engine.finish(it,"interrupted")};notificationIds.remove(it)?.let(notifications::cancel)};if(all.isNotEmpty())graph.requestSync();super.onDestroy()}
     companion object {private const val CHANNEL="alarm-playback";private const val SUMMARY=1000}
 }

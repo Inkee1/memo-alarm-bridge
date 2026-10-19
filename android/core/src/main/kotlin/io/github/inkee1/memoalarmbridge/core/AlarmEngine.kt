@@ -22,13 +22,14 @@ class AlarmEngine(private val ledger:LedgerPort,private val scheduler:SchedulerP
    if(cancelled(s,rule.scheduleId,rule.epochId))return PrepareResult("cancelled",report(rule.scheduleId).active)
    if(old!=null){
     if(version==old.desiredVersion&&rule.epochId==old.epochId&&(!refresh||audioRef(rule,version) in pendingAudio))return report(rule.scheduleId)
-    if(version.localGeneration<old.desiredVersion.localGeneration||(version.localGeneration==old.desiredVersion.localGeneration&&version!=old.desiredVersion)||(old.desiredVersion.serverRevision!=null&&(version.serverRevision==null||version.serverRevision<old.desiredVersion.serverRevision)))return PrepareResult("conflict",report(rule.scheduleId).active)
+    if(version.localGeneration<old.desiredVersion.localGeneration||(version.localGeneration==old.desiredVersion.localGeneration&&version!=old.desiredVersion))return PrepareResult("conflict",report(rule.scheduleId).active)
    }
    val count=s.rules.values.count{it.scheduleId!=rule.scheduleId&&!cancelled(s,it.scheduleId,it.epochId)&&(it.state !in listOf("cancelled","missed","fired","dismissed","interrupted")||(it.active+it.candidate).mapNotNull(s.entries::get).any{e->e.phase in listOf("active","candidate","firing")})}
-   require(count<50){"At most 50 active schedules"}
-   val state=when{!unlocked()->"blocked_audio";!scheduler.canScheduleExact()->"blocked_permission";else->"preparing"}
-   val r=RuleExecution(rule.scheduleId,rule.epochId,version,state,old?.active?:emptyList())
-   val obsolete=old?.candidate.orEmpty().mapNotNull(s.entries::get)
+   val future=nextOccurrences(rule,now(),1).isNotEmpty()
+   require(!future||count<50){"At most 50 active schedules"}
+   val state=when{!future->"missed";!unlocked()->"blocked_audio";!scheduler.canScheduleExact()->"blocked_permission";else->"preparing"}
+   val r=RuleExecution(rule.scheduleId,rule.epochId,version,state,if(future)old?.active?:emptyList()else emptyList())
+   val obsolete=(old?.candidate.orEmpty()+if(future)emptyList()else old?.active.orEmpty()).mapNotNull(s.entries::get)
    ledger.write(s.copy(rules=s.rules+(rule.scheduleId to r),entries=s.entries+obsolete.associate{it.key.token to it.copy(phase="cancelled")}))
    obsolete.forEach{safeCancel(it.key)}
    if(state!="preparing")return report(rule.scheduleId)

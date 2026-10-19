@@ -12,12 +12,13 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
-//go:embed assets/index.html assets/app.js assets/state.mjs assets/style.css
+//go:embed assets/index.html assets/app.js assets/state.mjs assets/audio.mjs assets/style.css
 var assets embed.FS
 
 type localSession struct {
@@ -51,7 +52,7 @@ func equal(a, b string) bool {
 	return len(a) > 0 && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Cache-Control", "no-store")
@@ -70,7 +71,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "POST required", 405)
 			return
 		}
-		if strings.Split(r.Header.Get("Content-Type"), ";")[0] != "application/json" {
+		if !strings.HasPrefix(r.URL.Path, "/api/audio/upload/") && strings.Split(r.Header.Get("Content-Type"), ";")[0] != "application/json" {
 			http.Error(w, "JSON required", 415)
 			return
 		}
@@ -81,6 +82,38 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		sess, ok := s.authorize(r)
 		if !ok || !equal(r.Header.Get("X-CSRF-Token"), sess.csrf) {
 			http.Error(w, "session approval required", 403)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/audio/upload/") {
+			hash := strings.TrimPrefix(r.URL.Path, "/api/audio/upload/")
+			ref, err := s.service.PutBlob(r.Context(), http.MaxBytesReader(w, r.Body, domain.MaxBlobBytes+1), hash)
+			if err != nil {
+				http.Error(w, "audio incomplete, too large or hash mismatch", 400)
+				return
+			}
+			writeJSON(w, 200, ref)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/audio/read/") {
+			hash := strings.TrimPrefix(r.URL.Path, "/api/audio/read/")
+			path, err := s.service.Store.BlobPath(r.Context(), hash)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			file, err := os.Open(path)
+			if err != nil {
+				http.Error(w, "audio unavailable", 500)
+				return
+			}
+			defer file.Close()
+			info, err := file.Stat()
+			if err != nil {
+				http.Error(w, "audio unavailable", 500)
+				return
+			}
+			w.Header().Set("Content-Type", "application/octet-stream")
+			http.ServeContent(w, r, hash, info.ModTime(), file)
 			return
 		}
 		if r.URL.Path != "/api/command" {
@@ -105,7 +138,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
-	case "/", "/app.js", "/state.mjs", "/style.css":
+	case "/", "/app.js", "/state.mjs", "/audio.mjs", "/style.css":
 		s.files.ServeHTTP(w, r)
 	default:
 		http.NotFound(w, r)

@@ -39,14 +39,14 @@ class NotesScreen(private val host:MainActivity,state:Bundle?):LinearLayout(host
         val text=editor.text.toString();require(text.isNotBlank()||audioHash.isNotEmpty()){host.tr("Write a note or record your voice first.","메모를 적거나 음성을 녹음하세요.")}
         val note=Note(id?:UUID.randomUUID().toString(),text,audioHash)
         id=note.noteId
-        host.work({host.graph.content().saveNote(note)}){stored->id=stored.note.noteId;host.tell(host.tr("Saved locally.","폰에 저장했습니다."));refresh()}
+        host.work({host.graph.content().saveNote(note)}){stored->id=stored.note.noteId;host.graph.requestSync();host.tell(host.tr("Saved locally.","폰에 저장했습니다."));refresh()}
     }
-    fun refresh(){if(loading)return;loading=true;host.work({try{host.graph.content().notes()}finally{loading=false}}){notes->
+    fun refresh(){if(loading)return;loading=true;host.work({try{host.graph.content().notes() to host.graph.content().read()}finally{loading=false}}){(notes,sync)->
         list.removeAllViews()
         if(notes.isEmpty())list.addView(host.label(host.tr("Your first note starts above.","위에서 첫 메모를 작성하세요."),14,MainActivity.MUTED))
-        notes.forEach{stored->val note=stored.note;val card=host.panel();card.addView(host.label(note.text.ifBlank{host.tr("Voice note","음성 메모")},17));card.addView(host.label(if(stored.version.serverRevision==null)host.tr("Local only","폰에만 저장")else host.tr("Saved · revision ","저장됨 · 버전 ")+stored.version.serverRevision,12,MainActivity.MUTED))
+        notes.forEach{stored->val note=stored.note;val card=host.panel();card.addView(host.label(note.text.ifBlank{host.tr("Voice note","음성 메모")},17));card.addView(host.label(host.syncStatus(sync,"note:${note.noteId}"),12,MainActivity.MUTED))
             val actions=LinearLayout(host);actions.addView(host.button(host.tr("Edit","편집")){id=note.noteId;audioHash=note.audioBlobSha256;editor.setText(note.text);updateRecording()},LayoutParams(0,-2,1f))
-            actions.addView(host.button(host.tr("Delete","삭제")){AlertDialog.Builder(host).setMessage(host.tr("Delete this note?","이 메모를 삭제할까요?")).setNegativeButton(android.R.string.cancel,null).setPositiveButton(android.R.string.ok){_,_->host.work({host.graph.content().deleteNote(note.noteId)}){refresh()}}.show()},LayoutParams(0,-2,1f));card.addView(actions)
+            actions.addView(host.button(host.tr("Delete","삭제")){AlertDialog.Builder(host).setMessage(host.tr("Delete this note?","이 메모를 삭제할까요?")).setNegativeButton(android.R.string.cancel,null).setPositiveButton(android.R.string.ok){_,_->host.work({host.graph.content().deleteNote(note.noteId)}){host.graph.requestSync();refresh()}}.show()},LayoutParams(0,-2,1f));card.addView(actions)
             if(note.audioBlobSha256.isNotEmpty())card.addView(host.button(host.tr("Play voice note","음성 메모 재생")){play(note.audioBlobSha256)})
             list.addView(card)
         }

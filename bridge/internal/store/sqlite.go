@@ -91,6 +91,9 @@ func (s *Store) Apply(ctx context.Context, m domain.Mutation) (domain.MutationRe
 			return result, ErrOperationReuse
 		}
 		err = json.Unmarshal(priorResult, &result)
+		if err == nil && result.Status == "conflict" {
+			return result, ErrConflict
+		}
 		return result, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -105,6 +108,13 @@ func (s *Store) Apply(ctx context.Context, m domain.Mutation) (domain.MutationRe
 		result.Revision = current.Revision
 		if exists {
 			result.Current = &current
+		}
+		saved, _ := json.Marshal(result)
+		if _, err = tx.ExecContext(ctx, "INSERT INTO operations(operation_id,fingerprint,result) VALUES(?,?,?)", m.OperationID, fingerprint, saved); err != nil {
+			return result, err
+		}
+		if err = tx.Commit(); err != nil {
+			return result, err
 		}
 		return result, ErrConflict
 	}
@@ -150,12 +160,15 @@ func (s *Store) Apply(ctx context.Context, m domain.Mutation) (domain.MutationRe
 		}
 		active = r.Enabled
 		if active {
-			var count int
-			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM entities WHERE entity_type='schedule' AND active=1 AND entity_id<>?", m.EntityID).Scan(&count); err != nil {
-				return result, err
-			}
-			if count >= 50 {
-				return result, errors.New("at most 50 active schedules")
+			future, _ := domain.NextOccurrences(r, time.Now(), 1)
+			if len(future) > 0 {
+				count, countErr := activeCount(ctx, tx, m.EntityID, time.Now())
+				if countErr != nil {
+					return result, countErr
+				}
+				if count >= 50 {
+					return result, errors.New("at most 50 active schedules")
+				}
 			}
 		} else {
 			if _, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO tombstones(schedule_id,epoch_id) VALUES(?,?)", m.EntityID, r.EpochID); err != nil {
@@ -197,6 +210,9 @@ func (s *Store) Apply(ctx context.Context, m domain.Mutation) (domain.MutationRe
 		if err != nil {
 			return result, err
 		}
+		result.Entity = &domain.Entity{EntityType: m.EntityType, EntityID: m.EntityID, Revision: result.Revision, Payload: payload, Deleted: deleted}
+	} else if exists {
+		result.Entity = &current
 	}
 	delivered := m
 	if m.Action == "upsert" {
@@ -214,6 +230,33 @@ func (s *Store) Apply(ctx context.Context, m domain.Mutation) (domain.MutationRe
 		return result, err
 	}
 	return result, nil
+}
+
+func activeCount(ctx context.Context, tx *sql.Tx, except string, now time.Time) (int, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT payload FROM entities WHERE entity_type='schedule' AND active=1 AND entity_id<>?", except)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var payload []byte
+		if err = rows.Scan(&payload); err != nil {
+			return 0, err
+		}
+		var r domain.ScheduleRule
+		if err = json.Unmarshal(payload, &r); err != nil {
+			return 0, err
+		}
+		next, e := domain.NextOccurrences(r, now, 1)
+		if e != nil {
+			return 0, e
+		}
+		if len(next) > 0 {
+			count++
+		}
+	}
+	return count, rows.Err()
 }
 func (s *Store) List(ctx context.Context) (domain.Snapshot, error) {
 	snap := domain.Snapshot{SchemaVersion: 1, Entities: []domain.Entity{}, DeviceAcks: []domain.DeviceAck{}}

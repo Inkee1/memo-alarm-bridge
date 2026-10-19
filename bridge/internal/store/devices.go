@@ -15,6 +15,7 @@ type Device struct {
 	DeviceID string `json:"device_id"`
 	Name     string `json:"name"`
 	Revoked  bool   `json:"revoked"`
+	LastSeen string `json:"last_seen,omitempty"`
 }
 
 func (s *Store) RegisterDevice(ctx context.Context, id, name, token string) error {
@@ -42,14 +43,14 @@ func (s *Store) AuthenticateDevice(ctx context.Context, id, token string) (Devic
 
 func (s *Store) Devices(ctx context.Context) ([]Device, error) {
 	out := []Device{}
-	rows, err := s.db.QueryContext(ctx, "SELECT device_id,name,revoked FROM devices ORDER BY name")
+	rows, err := s.db.QueryContext(ctx, "SELECT device_id,name,revoked,last_seen FROM devices ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var d Device
-		if err = rows.Scan(&d.DeviceID, &d.Name, &d.Revoked); err != nil {
+		if err = rows.Scan(&d.DeviceID, &d.Name, &d.Revoked, &d.LastSeen); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
