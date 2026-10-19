@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -64,6 +65,9 @@ func TestPinnedClientRejectsRedirect(t *testing.T) {
 	}
 }
 func TestIdentitySurvivesReopenAndRejectsWrongHost(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("persistent identity requires Windows DPAPI; exercised by the Windows job")
+	}
 	path := filepath.Join(t.TempDir(), "identity.json")
 	a, ha, e := LoadOrCreateIdentity(path, "127.0.0.1")
 	if e != nil {

@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.wav binary
+# Preserve upstream license text, including its trailing blank lines.
+LICENSES/* -whitespace

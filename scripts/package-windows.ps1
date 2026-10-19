@@ -20,8 +20,8 @@ try {
  [IO.File]::WriteAllText((Join-Path $stage 'manifest.json'),($manifest|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
  Copy-Item -LiteralPath (Join-Path $projectRoot 'packaging/README.txt') -Destination (Join-Path $stage 'README.txt')
  Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $stage
- if(Test-Path -LiteralPath (Join-Path $projectRoot 'THIRD_PARTY_NOTICES.md')){Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD_PARTY_NOTICES.md') -Destination $stage}
- if(Test-Path -LiteralPath (Join-Path $projectRoot 'LICENSES')){Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSES') -Destination $stage -Recurse}
+ Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD_PARTY_NOTICES.md') -Destination $stage
+ Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSES') -Destination $stage -Recurse
  $zip=Join-Path $outputRoot "memoalarm-bridge-$Version-windows-x64.zip"
  Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -Force
  $zipHash=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
