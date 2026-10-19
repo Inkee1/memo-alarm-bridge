@@ -5,7 +5,8 @@
 **/build/
 **/local.properties
 dist/
-data/
+/data/
+/bridge/data/
 *.db
 *.db-*
 *.log
