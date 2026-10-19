@@ -9,6 +9,8 @@ Artifacts:
 - Android release APK: **unsigned and not directly installable**. Production signing is a separate owner decision.
 - SHA-256 files and APK identity/signature metadata accompany the packages.
 
+The final review fix pass protects open/restored Android drafts against concurrent sync changes, preserves eligible recently due alarms during crash recovery, and shows complete schedule/recording differences before conflict resolution. Stale drafts remain available; saving one as new retains the existing saved item.
+
 Android JVM tests, lint/build and package checks pass as described in the [verification report](verification.md); physical-phone playback, DND/OEM/reboot behavior and UI flows remain unverified. Remote CI/publication must be observed separately. Cloud-dot/self-host MCP connectivity is not claimed. No automatic voice call, transcription, paid AI API, account or central server is required.
 
 Use synthetic data while evaluating. Review [installation](installation.md), [security](security.md), [support](support.md) and [notices](../THIRD_PARTY_NOTICES.md). A pending PC save is not an armed phone alarm, and an offline phone may still ring until cancellation is received.

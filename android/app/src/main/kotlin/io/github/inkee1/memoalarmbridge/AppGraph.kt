@@ -30,8 +30,8 @@ class AppGraph private constructor(private val context:Context) {
         override fun inspect(ref:String)=audio().inspect(ref)
     }
     val engine=AlarmEngine(ledger,scheduler,lazyAudio,Instant::now,::unlocked,{content().rules()})
-    fun saveRule(rule:ScheduleRule):PrepareResult {val version=content().editRule(rule);return engine.prepare(rule,version).also{requestSync()}}
-    fun cancelRule(id:String){val stored=content().rule(id)?:return;val disabled=stored.first.copy(enabled=false);content().editRule(disabled);engine.cancel(disabled.scheduleId,disabled.epochId);requestSync()}
+    fun saveRule(rule:ScheduleRule,expectedVersion:Version?=null):Version {val version=content().editRule(rule,expectedVersion);engine.prepare(rule,version);requestSync();return version}
+    fun cancelRule(id:String,expectedVersion:Version){val stored=content().rule(id)?:return;val disabled=stored.first.copy(enabled=false);content().editRule(disabled,expectedVersion);engine.cancel(disabled.scheduleId,disabled.epochId);requestSync()}
     companion object {
         @Volatile private var instance:AppGraph?=null
         fun get(context:Context):AppGraph=instance?:synchronized(this){instance?:AppGraph(context.applicationContext).also{instance=it}}

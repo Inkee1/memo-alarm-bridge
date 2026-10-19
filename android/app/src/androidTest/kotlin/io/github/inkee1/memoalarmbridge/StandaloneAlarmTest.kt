@@ -25,7 +25,7 @@ class StandaloneAlarmTest {
    val found=graph.content().notes().single{it.note.text==marker}
    assertNull(found.version.serverRevision);assertEquals(1L,found.version.localGeneration)
   }finally{
-   graph.content().notes().filter{it.note.text==marker}.forEach{graph.content().deleteNote(it.note.noteId)}
+   graph.content().notes().filter{it.note.text==marker}.forEach{graph.content().deleteNote(it.note.noteId,it.version)}
    instrumentation.runOnMainSync{activity.finish()}
   }
  }

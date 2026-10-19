@@ -6,7 +6,8 @@ import android.os.Bundle
 import android.widget.*
 import io.github.inkee1.memoalarmbridge.R
 import io.github.inkee1.memoalarmbridge.audio.VoiceRecorder
-import io.github.inkee1.memoalarmbridge.core.Note
+import io.github.inkee1.memoalarmbridge.core.*
+import com.google.gson.Gson
 import java.io.File
 import java.util.UUID
 
@@ -16,6 +17,9 @@ class NotesScreen(private val host:MainActivity,state:Bundle?):LinearLayout(host
     private val recording=host.label("")
     private val recorder=VoiceRecorder(host)
     private var id=state?.getString("note.id")
+    private var baseVersion:Version?=state?.getString("note.base")?.let{Gson().fromJson(it,Version::class.java)}
+    private var draftSequence=0L
+    private var saving=false
     private var audioHash=state?.getString("note.audio")?:""
     private var player:MediaPlayer?=null
     @Volatile private var loading=false
@@ -27,7 +31,7 @@ class NotesScreen(private val host:MainActivity,state:Bundle?):LinearLayout(host
         val row=LinearLayout(host)
         row.addView(host.button(host.tr("Record / stop","녹음 / 정지")){if(recorder.active)stopRecording()else host.requestMic()},LayoutParams(0,-2,1f))
         row.addView(host.button(host.tr("Save note","메모 저장")){save()}.apply{id=R.id.save_note},LayoutParams(0,-2,1f));card.addView(row)
-        card.addView(host.button(host.tr("New blank note","새 메모")){id=null;audioHash="";editor.setText("");updateRecording()})
+        card.addView(host.button(host.tr("New blank note","새 메모")){draftSequence++;id=null;baseVersion=null;audioHash="";editor.setText("");updateRecording()})
         card.addView(host.label(host.tr("Voice capture stays on this screen. Tap Save to keep the draft. No transcription service is required.","녹음은 이 화면에서만 진행됩니다. 저장을 눌러 초안을 보관하세요. 음성 인식 서비스는 필요하지 않습니다."),12,MainActivity.MUTED))
         addView(card);addView(host.label(host.tr("Saved on this phone","이 폰에 저장됨"),19,bold=true));addView(list);updateRecording()
     }
@@ -35,18 +39,28 @@ class NotesScreen(private val host:MainActivity,state:Bundle?):LinearLayout(host
     fun startRecording(){recorder.start{host.runOnUiThread{runCatching{stopRecording()}.onFailure(host::error)}};updateRecording()}
     private fun stopRecording(){recorder.stop()?.let{audioHash=it};updateRecording()}
     private fun save(){
+        if(saving)return
         if(recorder.active)stopRecording()
         val text=editor.text.toString();require(text.isNotBlank()||audioHash.isNotEmpty()){host.tr("Write a note or record your voice first.","메모를 적거나 음성을 녹음하세요.")}
         val note=Note(id?:UUID.randomUUID().toString(),text,audioHash)
-        id=note.noteId
-        host.work({host.graph.content().saveNote(note)}){stored->id=stored.note.noteId;host.graph.requestSync();host.tell(host.tr("Saved locally.","폰에 저장했습니다."));refresh()}
+        val expected=baseVersion;val sequence=draftSequence;id=note.noteId;saving=true
+        host.work({runCatching{host.graph.content().saveNote(note,expected)}}){result->
+            saving=false
+            result.onSuccess{stored->if(draftSequence==sequence){id=stored.note.noteId;baseVersion=stored.version};host.graph.requestSync();host.tell(host.tr("Saved locally.","폰에 저장했습니다."));refresh()}
+                .onFailure{error->if(error is StaleDraftException&&draftSequence==sequence){
+                    reviewChangedDraft(host,"note",Gson().toJsonTree(note).asJsonObject,error.current,
+                        {current->load(Gson().fromJson(current.payload,Note::class.java),current.version)},
+                        {draftSequence++;id=null;baseVersion=null;save()})
+                }else host.error(error)}
+        }
     }
+    private fun load(note:Note,version:Version){draftSequence++;id=note.noteId;baseVersion=version;audioHash=note.audioBlobSha256;editor.setText(note.text);updateRecording()}
     fun refresh(){if(loading)return;loading=true;host.work({try{host.graph.content().notes() to host.graph.content().read()}finally{loading=false}}){(notes,sync)->
         list.removeAllViews()
         if(notes.isEmpty())list.addView(host.label(host.tr("Your first note starts above.","위에서 첫 메모를 작성하세요."),14,MainActivity.MUTED))
         notes.forEach{stored->val note=stored.note;val card=host.panel();card.addView(host.label(note.text.ifBlank{host.tr("Voice note","음성 메모")},17));card.addView(host.label(host.syncStatus(sync,"note:${note.noteId}"),12,MainActivity.MUTED))
-            val actions=LinearLayout(host);actions.addView(host.button(host.tr("Edit","편집")){id=note.noteId;audioHash=note.audioBlobSha256;editor.setText(note.text);updateRecording()},LayoutParams(0,-2,1f))
-            actions.addView(host.button(host.tr("Delete","삭제")){AlertDialog.Builder(host).setMessage(host.tr("Delete this note?","이 메모를 삭제할까요?")).setNegativeButton(android.R.string.cancel,null).setPositiveButton(android.R.string.ok){_,_->host.work({host.graph.content().deleteNote(note.noteId)}){host.graph.requestSync();refresh()}}.show()},LayoutParams(0,-2,1f));card.addView(actions)
+            val actions=LinearLayout(host);actions.addView(host.button(host.tr("Edit","편집")){load(note,stored.version)},LayoutParams(0,-2,1f))
+            actions.addView(host.button(host.tr("Delete","삭제")){AlertDialog.Builder(host).setMessage(host.tr("Delete this note?","이 메모를 삭제할까요?")).setNegativeButton(android.R.string.cancel,null).setPositiveButton(android.R.string.ok){_,_->host.work({host.graph.content().deleteNote(note.noteId,stored.version)}){host.graph.requestSync();refresh()}}.show()},LayoutParams(0,-2,1f));card.addView(actions)
             if(note.audioBlobSha256.isNotEmpty())card.addView(host.button(host.tr("Play voice note","음성 메모 재생")){play(note.audioBlobSha256)})
             list.addView(card)
         }
@@ -57,5 +71,5 @@ class NotesScreen(private val host:MainActivity,state:Bundle?):LinearLayout(host
     }
     fun pause(){if(recorder.active)runCatching{stopRecording()}.onFailure(host::error);player?.release();player=null}
     fun close()=pause()
-    fun saveDraft(out:Bundle){out.putString("note.id",id);out.putString("note.audio",audioHash);out.putString("note.text",editor.text.toString())}
+    fun saveDraft(out:Bundle){out.putString("note.id",id);out.putString("note.base",Gson().toJson(baseVersion));out.putString("note.audio",audioHash);out.putString("note.text",editor.text.toString())}
 }

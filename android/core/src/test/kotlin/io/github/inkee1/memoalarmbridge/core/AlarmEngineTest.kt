@@ -29,6 +29,19 @@ class AlarmEngineTest {
  @Test fun synthesisQueueSuccessIsNotReady(){val f=Fixture(now);f.audio.auto=false;val e=f.engine();assertEquals("preparing",e.prepare(rule,Version(1,1)).state);assertTrue(f.scheduler.scheduled.isEmpty());f.audio.pending!!.invoke();assertEquals("armed",e.report(rule.scheduleId).state);assertEquals(1,f.scheduler.scheduled.size)}
  @Test fun audioHashMismatchBlocks(){val f=Fixture(now);f.audio.mismatch=true;val r=f.engine().prepare(rule,Version(1,1));assertEquals("blocked_audio",r.state);assertTrue(f.scheduler.scheduled.isEmpty())}
  @Test fun crashAfterOsRegisterRecovers(){val f=Fixture(now);f.scheduler.crash=true;try{f.engine().prepare(rule,Version(1,1));fail("crash not injected")}catch(_:Crash){};assertEquals(1,f.scheduler.scheduled.size);val key=f.ledger.value.entries.values.single().key;f.now=Instant.parse(rule.atUtc);val recovered=f.engine().onTrigger(key);assertTrue(recovered.play);assertFalse(f.engine().onTrigger(key).play)}
+ @Test fun recentlyDueRecurringCandidateSurvivesReconcileBeforeDelivery(){
+  for(reason in listOf(RecoveryReason.APP_OPEN,RecoveryReason.TIME_CHANGED)){
+   val f=Fixture(now);val recurring=rule.copy(kind="daily",atUtc="",localTime="09:00",zoneId="UTC");val version=Version(1,1)
+   f.scheduler.crash=true;try{f.engine().prepare(recurring,version);fail("crash not injected")}catch(_:Crash){}
+   val due=f.ledger.value.entries.values.minBy{Instant.parse(it.atUtc)}.key
+   f.scheduler.crash=false;f.now=Instant.parse("2030-01-01T09:01:00Z")
+   val recovered=AlarmEngine(f.ledger,f.scheduler,f.audio,{f.now},{true},{listOf(recurring to version)})
+   recovered.reconcile(reason)
+   assertTrue("due registration was cancelled by $reason replenishment",due.token in f.scheduler.scheduled)
+   assertTrue("valid OS delivery rejected after $reason",recovered.onTrigger(due).play)
+   assertFalse(recovered.onTrigger(due).play)
+  }
+ }
  @Test fun staleRevisionCannotPlay(){val f=Fixture(now);val e=f.engine();val old=e.prepare(rule,Version(1,1)).active.single().key;val fresh=e.prepare(rule.copy(body="Updated synthetic reminder"),Version(2,2)).active.single().key;f.now=Instant.parse(rule.atUtc);assertFalse(e.onTrigger(old).play);assertTrue(e.onTrigger(fresh).play)}
  @Test fun cancelWinsBeforeDispatch(){val f=Fixture(now);val e=f.engine();val key=e.prepare(rule,Version(1,1)).active.single().key;e.cancel(rule.scheduleId,rule.epochId);f.now=Instant.parse(rule.atUtc);assertFalse(e.onTrigger(key).play);assertTrue(f.scheduler.scheduled.isEmpty());assertEquals("cancelled",e.prepare(rule,Version(2,2)).state)}
  @Test fun cancelWinsWhileSynthesisIsPending(){val f=Fixture(now);f.audio.auto=false;val e=f.engine();e.prepare(rule,Version(1,1));e.cancel(rule.scheduleId,rule.epochId);f.audio.pending!!.invoke();assertTrue(f.scheduler.scheduled.isEmpty());assertEquals("cancelled",e.report(rule.scheduleId).state)}

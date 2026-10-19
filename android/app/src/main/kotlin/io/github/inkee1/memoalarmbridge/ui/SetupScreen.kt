@@ -13,6 +13,8 @@ import android.widget.LinearLayout
 import android.os.Build.MODEL
 import io.github.inkee1.memoalarmbridge.core.RecoveryReason
 import io.github.inkee1.memoalarmbridge.core.LocalRecord
+import io.github.inkee1.memoalarmbridge.core.describeConflictVersion
+import java.util.Locale
 import io.github.inkee1.memoalarmbridge.sync.ConnectionInvite
 import io.github.inkee1.memoalarmbridge.links.ConversationLauncher
 
@@ -51,17 +53,17 @@ class SetupScreen(private val host:MainActivity):LinearLayout(host) {
         status.text=host.tr("Exact alarms: ","정확한 알람: ")+(if(host.graph.scheduler.canScheduleExact())host.tr("allowed","허용")else host.tr("not allowed","미허용"))+"\n"+host.tr("Notifications: ","알림: ")+(if(notification)host.tr("allowed","허용")else host.tr("not allowed · use in-app Stop controls","미허용 · 앱 내부 정지 버튼 사용"))+"\n"+host.tr("Alarm volume: ","알람 볼륨: ")+volume+"\n"+host.tr("Voice: ","음성: ")+(host.getSharedPreferences("settings",0).getString("voice",null)?:host.tr("installed system-language voice","설치된 시스템 언어 음성"))
         if(!loading){loading=true;host.work({try{Triple(host.graph.sync().info(),host.graph.content().read(),host.graph.sync().lastError())}finally{loading=false}}){(info,state,error)->
             connection.text=(info?.endpoint?:host.tr("No PC paired","연결한 PC 없음"))+"\n"+host.tr("Last contact: ","마지막 접속: ")+state.lastContact.ifEmpty{host.tr("never","없음")}+"\n"+host.tr("Pending edits: ","전송 대기 수정: ")+state.records.values.count{it.dirty}+(if(error.isEmpty())""else "\n"+error)
-            conflicts.removeAllViews();state.records.values.filter{it.conflict!=null}.forEach{record->val card=host.panel();card.addView(host.label(readable(record.payload,record.deleted),15));card.addView(host.button(host.tr("Review both versions","두 버전 검토")){reviewConflict(record)});conflicts.addView(card)}
+            conflicts.removeAllViews();state.records.values.filter{it.conflict!=null}.forEach{record->val card=host.panel();card.addView(host.label(readable(record.entityType,record.payload,record.deleted),15));card.addView(host.button(host.tr("Review both versions","두 버전 검토")){reviewConflict(record)});conflicts.addView(card)}
         }}
     }
     private fun reviewInvitation(){
         val parsed=ConnectionInvite.decode(invite.text.toString());val name=deviceName.text.toString().trim()
         AlertDialog.Builder(host).setTitle(host.tr("Connect to this PC?","이 PC에 연결할까요?")).setMessage(parsed.endpoint+"\n\n"+host.tr("Certificate fingerprint\n","인증서 지문\n")+parsed.certSha256+"\n\n"+host.tr("Compare this with your PC. Pairing creates a protected device credential and enables background sync. Data on both sides will be shared; conflicts stay available for review.","PC 표시와 비교하세요. 연결하면 보호된 기기 인증 정보를 만들고 백그라운드 동기화를 켭니다. 양쪽 데이터가 공유되며 충돌한 버전은 검토할 수 있도록 남습니다.")).setNegativeButton(android.R.string.cancel,null).setPositiveButton(host.tr("Pair","연결")){_,_->host.tell(host.tr("Pairing…","연결 중…"));host.network({host.graph.sync().pair(parsed,name)}){invite.setText("");host.tell(host.tr("Paired. Use Sync now, then check each alarm’s phone status.","연결했습니다. 지금 동기화한 뒤 각 알람의 폰 상태를 확인하세요."));refresh()}}.show()
     }
-    private fun readable(payload:com.google.gson.JsonObject,deleted:Boolean):String=if(deleted)host.tr("Deleted","삭제됨")else (payload["text"]?:payload["body"])?.asString.orEmpty().ifBlank{host.tr("Voice note","음성 메모")}
+    private fun readable(entityType:String,payload:com.google.gson.JsonObject,deleted:Boolean)=describeConflictVersion(entityType,payload,deleted,Locale.getDefault().language=="ko")
     private fun reviewConflict(record:LocalRecord){
         val conflict=requireNotNull(record.conflict);val remote=conflict.remote
-        val text=host.tr("On this phone:\n","이 폰의 버전:\n")+readable(conflict.cancelledDraft?:record.payload,record.deleted)+"\n\n"+host.tr("On the PC:\n","PC 버전:\n")+(remote?.let{readable(it.payload,it.deleted)}?:host.tr("No current record","현재 항목 없음"))+(if(conflict.reason=="cancelled")host.tr("\n\nThe previous alarm was cancelled. Keeping this phone’s version creates a new alarm epoch.","\n\n이전 알람은 취소됐습니다. 폰 버전을 유지하면 새 알람으로 활성화합니다.")else "")
+        val text=host.tr("On this phone:\n","이 폰의 버전:\n")+readable(record.entityType,conflict.cancelledDraft?:record.payload,record.deleted)+"\n\n"+host.tr("On the PC:\n","PC 버전:\n")+(remote?.let{readable(it.entityType,it.payload,it.deleted)}?:host.tr("No current record","현재 항목 없음"))+(if(conflict.reason=="cancelled")host.tr("\n\nThe previous alarm was cancelled. Keeping this phone’s version creates a new alarm epoch.","\n\n이전 알람은 취소됐습니다. 폰 버전을 유지하면 새 알람으로 활성화합니다.")else "")
         fun resolve(local:Boolean){host.work({host.graph.sync().engine.resolve(record.key,local,conflict.revision,record.version.localGeneration);host.graph.engine.reconcile(RecoveryReason.APP_OPEN);host.graph.requestSync()}){refresh()}}
         AlertDialog.Builder(host).setTitle(host.tr("Choose a version","버전 선택")).setMessage(text).setPositiveButton(host.tr("Use phone version","폰 버전 사용")){_,_->resolve(true)}.setNegativeButton(host.tr("Use PC version","PC 버전 사용")){_,_->resolve(false)}.setNeutralButton(android.R.string.cancel,null).show()
     }

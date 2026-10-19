@@ -57,6 +57,7 @@ All paired devices can read and edit this collection. Pair only devices you trus
 | `blocked_permission` | Review exact-alarm access and notification status in Setup, return to the app, and recheck. Unknown is not granted. |
 | `blocked_audio` | Select an installed offline voice, check free space, and recheck preparation. An older working version may still be scheduled; its evidence is shown separately. |
 | Conflict | Open Setup, compare both copies, and choose explicitly. Enabling a cancelled rule creates a new epoch. |
+| Saved item changed while editing | Your draft remains in the form. Compare text/audio or schedule fields, then keep editing, load the saved version, or save the draft as a separate new item. Reopening the item starts from its current version; rotation does not reset the original draft version. |
 | APK signature mismatch | Keep the installed app. Do not automatically uninstall: Android uninstall erases local data. Obtain an APK signed with the same key, or deliberately preserve/sync important data before a fresh install. |
 
 ## Back up, update, uninstall

@@ -9,7 +9,6 @@ import android.os.UserManager
 import com.google.gson.Gson
 import io.github.inkee1.memoalarmbridge.core.*
 import java.io.File
-import java.time.Instant
 import java.util.UUID
 
 data class StoredNote(val note:Note,val version:Version,val deleted:Boolean=false)
@@ -17,6 +16,7 @@ data class StoredNote(val note:Note,val version:Version,val deleted:Boolean=fals
 private fun privateContext(context:Context):Context {check(!context.isDeviceProtectedStorage&&context.getSystemService(UserManager::class.java).isUserUnlocked){"Unlock the phone before accessing private content"};return context.applicationContext}
 class ContentDatabase(context:Context,name:String="content.db"):SQLiteOpenHelper(privateContext(context),name,null,3),SyncPort {
  private val gson=Gson()
+ private val localEditor=LocalEditor(this)
  override fun onConfigure(db:SQLiteDatabase){
   db.execSQL("PRAGMA synchronous=FULL")
   // SQLiteOpenHelper starts the migration transaction after onConfigure.
@@ -38,19 +38,12 @@ class ContentDatabase(context:Context,name:String="content.db"):SQLiteOpenHelper
  fun rules():List<Pair<ScheduleRule,Version>>{val out=mutableListOf<Pair<ScheduleRule,Version>>();readableDatabase.rawQuery("SELECT rule,server_revision,local_generation FROM schedules",null).use{c->while(c.moveToNext()){val r=gson.fromJson(c.getString(0),ScheduleRule::class.java);validateRule(r).requireValid();out+=r to Version(if(c.isNull(1))null else c.getLong(1),c.getLong(2))}};return out}
  fun saveAudio(audio:ReadyAudio){require(validId(audio.ref)&&validHash(audio.sha256)&&audio.bytes in 1..25L*1024*1024);val cv=ContentValues().apply{put("ref",audio.ref);put("sha256",audio.sha256);put("bytes",audio.bytes)};check(writableDatabase.insertWithOnConflict("audio",null,cv,SQLiteDatabase.CONFLICT_REPLACE)!=-1L)}
  fun audio(ref:String):ReadyAudio?{readableDatabase.rawQuery("SELECT sha256,bytes FROM audio WHERE ref=?",arrayOf(ref)).use{c->if(!c.moveToFirst())return null;return ReadyAudio(ref,c.getString(0),c.getLong(1))}}
- @Synchronized fun editRule(rule:ScheduleRule):Version {
-  validateRule(rule).requireValid();val state=read();val key="schedule:"+rule.scheduleId;val previous=state.records[key];val version=Version(previous?.version?.serverRevision,(previous?.version?.localGeneration?:0)+1)
-  val conflict=previous?.conflict?.takeUnless{it.reason=="cancelled"&&previous.payload["epoch_id"].asString!=rule.epochId}
-  val record=LocalRecord("schedule",rule.scheduleId,gson.toJsonTree(rule).asJsonObject,version,conflict=conflict,bridgeGenerationFloor=previous?.bridgeGenerationFloor?:1)
-  write(state.copy(records=state.records+(key to record),cancelledEpochs=if(rule.enabled)state.cancelledEpochs else state.cancelledEpochs+(rule.scheduleId+":"+rule.epochId)));return version
+ @Synchronized fun editRule(rule:ScheduleRule,expectedVersion:Version?=null):Version=localEditor.saveRule(rule,expectedVersion).version
+ @Synchronized fun saveNote(note:Note,expectedVersion:Version?=null):StoredNote {
+  val saved=localEditor.saveNote(note,expectedVersion)
+  return StoredNote(gson.fromJson(saved.payload,Note::class.java),saved.version,saved.deleted)
  }
- @Synchronized fun saveNote(note:Note):StoredNote {
-  validateNote(note).requireValid();val previous=notes(true).find{it.note.noteId==note.noteId};val now=Instant.now().toString()
-  val value=StoredNote(note.copy(createdAt=previous?.note?.createdAt?.takeIf{it.isNotEmpty()}?:now,updatedAt=now),Version(previous?.version?.serverRevision,(previous?.version?.localGeneration?:0)+1))
-  val state=read();val key="note:"+note.noteId;val record=LocalRecord("note",note.noteId,gson.toJsonTree(value.note).asJsonObject,value.version,conflict=state.records[key]?.conflict,bridgeGenerationFloor=state.records[key]?.bridgeGenerationFloor?:1)
-  write(state.copy(records=state.records+(key to record)));return value
- }
- @Synchronized fun deleteNote(id:String){require(validId(id));val state=read();val key="note:$id";val previous=state.records[key]?:return;val payload=gson.toJsonTree(Note(id,updatedAt=Instant.now().toString())).asJsonObject;write(state.copy(records=state.records+(key to previous.copy(payload=payload,version=previous.version.copy(localGeneration=previous.version.localGeneration+1),deleted=true,dirty=true,syncError=""))))}
+ @Synchronized fun deleteNote(id:String,expectedVersion:Version)=localEditor.deleteNote(id,expectedVersion)
  fun putNote(value:StoredNote){validateNote(value.note).requireValid();require(value.version.localGeneration>0);val cv=ContentValues().apply{put("id",value.note.noteId);put("payload",gson.toJson(value.note));if(value.version.serverRevision==null)putNull("server_revision")else put("server_revision",value.version.serverRevision);put("local_generation",value.version.localGeneration);put("deleted",if(value.deleted)1 else 0)};check(writableDatabase.insertWithOnConflict("notes",null,cv,SQLiteDatabase.CONFLICT_REPLACE)!=-1L)}
  fun notes(includeDeleted:Boolean=false):List<StoredNote>{val out=mutableListOf<StoredNote>();readableDatabase.rawQuery("SELECT payload,server_revision,local_generation,deleted FROM notes"+(if(includeDeleted)"" else " WHERE deleted=0")+" ORDER BY rowid DESC",null).use{c->while(c.moveToNext()){val n=gson.fromJson(c.getString(0),Note::class.java);validateNote(n).requireValid();out+=StoredNote(n,Version(if(c.isNull(1))null else c.getLong(1),c.getLong(2)),c.getInt(3)!=0)}};return out}
  @Synchronized override fun read():SyncState {

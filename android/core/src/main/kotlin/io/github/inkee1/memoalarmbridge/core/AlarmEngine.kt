@@ -145,8 +145,11 @@ class AlarmEngine(private val ledger:LedgerPort,private val scheduler:SchedulerP
    }
    rules.entries.toList().forEach{(id,r)->val active=r.active.filter{entries[it]?.phase in listOf("active","firing")};val candidates=r.candidate.filter{entries[it]?.phase=="candidate"};rules[id]=r.copy(active=active,candidate=candidates)}
    s=s.copy(entries=entries,rules=rules);ledger.write(s)
-   // Recover complete future candidate groups using already durable audio intent.
-   for(r in s.rules.values){val candidates=r.candidate.mapNotNull(s.entries::get).filter{Instant.parse(it.atUtc)>at&&!cancelled(s,it.key.scheduleId,it.key.epochId)&&validCandidate(s,r,it)};if(candidates.isEmpty())continue
+   // Re-register future and eligible recently due candidates before promotion.
+   // Replenishment must not discard a valid delivery racing with app recovery.
+   // Boot/expired candidates were already removed above; OS success is still
+   // required for every promoted entry, so recovery does not invent an ACK.
+   for(r in s.rules.values){val candidates=r.candidate.mapNotNull(s.entries::get).filter{!Instant.parse(it.atUtc).isBefore(at.minusSeconds(300))&&!cancelled(s,it.key.scheduleId,it.key.epochId)&&validCandidate(s,r,it)};if(candidates.isEmpty())continue
     try{check(scheduler.canScheduleExact());candidates.forEach{scheduler.register(it.key,Instant.parse(it.atUtc));registered++};val fresh=ledger.read();val rr=fresh.rules.getValue(r.scheduleId);val regular=candidates.any{it.kind=="regular"};val old=if(regular)rr.active.mapNotNull(fresh.entries::get).filter{it.key.version!=r.desiredVersion}else emptyList();val tokens=candidates.map{it.key.token};ledger.write(fresh.copy(entries=fresh.entries+old.associate{it.key.token to it.copy(phase="cancelled")}+candidates.associate{it.key.token to it.copy(phase="active")},rules=fresh.rules+(r.scheduleId to rr.copy(state="armed",active=(rr.active-old.map{it.key.token}.toSet()+tokens).distinct(),candidate=rr.candidate-tokens.toSet()))));old.forEach{safeCancel(it.key)}}catch(_:Exception){candidates.forEach{safeCancel(it.key)};block(r.scheduleId,r.desiredVersion,"blocked_permission")}
    }
   }
