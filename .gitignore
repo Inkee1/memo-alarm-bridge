@@ -16,6 +16,7 @@ dist/
 *.pem
 *.key
 *.wav
+!android/app/src/main/res/raw/generic_alarm.wav
 *.m4a
 *.mp3
 .env*

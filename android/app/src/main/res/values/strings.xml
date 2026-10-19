@@ -1,0 +1,17 @@
+<resources>
+ <string name="app_name">MemoAlarm Bridge</string>
+ <string name="alarm_channel">Alarm controls</string>
+ <string name="alarm_active">Your reminder</string>
+ <string name="alarm_controls">Stop or snooze this occurrence.</string>
+ <string name="stop">Stop</string>
+ <string name="snooze">Snooze 5 min</string>
+ <item name="note_text" type="id"/>
+ <item name="save_note" type="id"/>
+ <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+  <item name="android:fontFamily">sans</item>
+  <item name="android:colorAccent">#007468</item>
+  <item name="android:windowLightStatusBar">true</item>
+  <item name="android:windowLightNavigationBar">true</item>
+  <item name="android:windowActionModeOverlay">true</item>
+ </style>
+</resources>

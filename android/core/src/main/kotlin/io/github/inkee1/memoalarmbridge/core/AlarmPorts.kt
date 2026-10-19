@@ -7,7 +7,9 @@ data class OccurrenceKey(val occurrenceId:String,val scheduleId:String,val epoch
 }
 // This ledger contains execution metadata only. Never add speech, note content,
 // authentication secrets, or private audio bytes to these device-protected types.
-data class AlarmEntry(val key:OccurrenceKey,val atUtc:String,val phase:String,val audioRef:String)
+// All defaults provide a no-arg constructor for persisted JSON evolution.
+// The database validator still rejects missing required identity/time fields.
+data class AlarmEntry(val key:OccurrenceKey=OccurrenceKey("","","",Version()),val atUtc:String="",val phase:String="",val audioRef:String="",val claimOwner:String="",val kind:String="regular",val parentToken:String="",val respectSilent:Boolean=false)
 data class RuleExecution(val scheduleId:String,val epochId:String,val desiredVersion:Version,val state:String,val active:List<String> = emptyList(),val candidate:List<String> = emptyList())
 data class ExecutionLedger(val rules:Map<String,RuleExecution> = emptyMap(),val entries:Map<String,AlarmEntry> = emptyMap(),val cancelledEpochs:Set<String> = emptySet())
 data class ReadyAudio(val ref:String,val sha256:String,val bytes:Long)
@@ -22,3 +24,5 @@ interface AudioPort {
  fun request(rule:ScheduleRule,ref:String,done:(Result<ReadyAudio>)->Unit)
  fun inspect(ref:String):ReadyAudio?
 }
+enum class RecoveryReason { BOOT,LOCKED_BOOT,APP_OPEN,UNLOCK,TIME_CHANGED,PERMISSION_CHANGED,PACKAGE_REPLACED,TRIGGER }
+data class RecoveryReport(val registered:Int,val missed:Int,val interrupted:Int,val privateContentRead:Boolean)

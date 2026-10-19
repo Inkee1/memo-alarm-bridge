@@ -1,0 +1,8 @@
+<resources>
+ <string name="app_name">MemoAlarm Bridge</string>
+ <string name="alarm_channel">알람 제어</string>
+ <string name="alarm_active">예약된 알람</string>
+ <string name="alarm_controls">이 알람을 정지하거나 미룹니다.</string>
+ <string name="stop">정지</string>
+ <string name="snooze">5분 미루기</string>
+</resources>
