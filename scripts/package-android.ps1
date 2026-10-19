@@ -35,3 +35,5 @@ $info=[ordered]@{schema_version=1;notice='Development key is project-local and d
 [IO.File]::WriteAllText((Join-Path $outputRoot 'APK-INFO.json'),($info|ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path $outputRoot 'ANDROID-SHA256SUMS.txt'),(($checksums -join "`n")+"`n"),[Text.UTF8Encoding]::new($false))
 Write-Output ('APK metadata/signature inspection and packaging passed: '+($records.file -join ', '))
+# The accepted unsigned-apksigner result is not this script's exit status.
+exit 0

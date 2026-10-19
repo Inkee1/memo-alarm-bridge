@@ -24,6 +24,9 @@ try {
  & (Join-Path $PSScriptRoot 'scan-public.ps1') -AllHistory
  & (Join-Path $PSScriptRoot 'package-windows.ps1') -GoExecutable $goCommand
  & (Join-Path $PSScriptRoot 'package-android.ps1') -AndroidSdk $AndroidSdk -SkipBuild
+ & (Join-Path $PSScriptRoot 'tests/exit-status.tests.ps1') -AndroidSdk $AndroidSdk
  & (Join-Path $PSScriptRoot 'tests/packaging.tests.ps1') -SkipRuntime:$StaticOnly
  if($StaticOnly){Write-Output 'PARTIAL verification passed. Windows runtime/Go execution, remote Linux CI and physical-phone/browser tests are NOT established.'}else{Write-Output 'Local automated verification passed. Physical-phone/browser tests and remote CI remain separate checks.'}
 } finally {Pop-Location}
+# GitHub's PowerShell wrapper also reads LASTEXITCODE after this script returns.
+exit 0

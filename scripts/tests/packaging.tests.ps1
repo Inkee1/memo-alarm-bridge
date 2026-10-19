@@ -19,7 +19,8 @@ try {
  Write-Output 'Windows ZIP manifest, hash, unsigned label and content allowlist passed.'
  if($SkipRuntime){Write-Output 'SKIPPED: Windows execution, install/start/CLI/uninstall smoke and minimal-PATH runtime.'}else{
   & (Join-Path $PSScriptRoot 'windows-runtime.ps1') -Executable $exe -PackageDirectory $scratch -Scratch $scratch
-  if($LASTEXITCODE -ne 0){throw 'Windows runtime smoke failed'}
+  # This PowerShell script checks Process.ExitCode and throws on failure.
+  # LASTEXITCODE here could belong to an unrelated earlier native command.
  }
  $info=Get-Content -LiteralPath (Join-Path $distRoot 'APK-INFO.json') -Raw | ConvertFrom-Json
  foreach($apk in $info.apks){$file=Join-Path $distRoot $apk.file;if((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $apk.sha256){throw 'APK hash mismatch'};if($apk.application_id -ne 'io.github.inkee1.memoalarmbridge' -or $apk.min_sdk -ne 31 -or $apk.target_sdk -ne 36){throw 'Incorrect APK support metadata'}}
@@ -30,3 +31,4 @@ try {
  if(-not $resolved.StartsWith($distRoot+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or -not ([IO.Path]::GetFileName($resolved)).StartsWith('.verify-')){throw 'Refusing cleanup outside private verification directory'}
  Remove-Item -LiteralPath $resolved -Recurse -Force
 }
+exit 0
